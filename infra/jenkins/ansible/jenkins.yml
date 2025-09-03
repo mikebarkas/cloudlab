@@ -1,0 +1,9 @@
+---
+# Jenkins playbook
+
+- hosts: jenkins
+  roles:
+    - jenkins
+
+  vars_files:
+    - roles/jenkins/vars/jenkins.yml
