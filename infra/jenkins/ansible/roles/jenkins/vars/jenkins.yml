@@ -1,0 +1,24 @@
+---
+# Variables for Jenkins install
+
+jenkins_name: ""
+admin_name: ""
+admin_passwd: ""
+ssh_public_key: ""
+
+ssl_crt_dir: ""
+ssl_crt_src: ""
+ssl_crt_dest: ""
+ssl_key_src: ""
+ssl_key_dest: ""
+
+nginx_config_src: ""
+nginx_config_dest: ""
+nginx_jenkins_config_src: ""
+nginx_jenkins_config_dest: ""
+
+sshd_config_src: "00-login-override.conf"
+sshd_config_dest: "/etc/ssh/sshd_config.d/"
+
+rpm_repo: "https://pkg.jenkins.io/redhat-stable/jenkins.repo"
+rpm_key: "https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key"
