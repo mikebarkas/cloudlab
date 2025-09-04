@@ -13,6 +13,6 @@ I primarily use AWS for most projects and for practicing for certifications. I a
 
 More information can be found for applications and services in each of the directories.
 
-[Jenkins](https://github.com/mikebarkas/cloudlab/tree/dev/infra/jenkins) - Nginx reverse proxy for Jenkins controller
+[Jenkins](https://github.com/mikebarkas/cloudlab/tree/dev/infra/jenkins) - A Jenkins controller on a Linux server
 
 AutoCorp Cloud - Go backend container (AWS) and Python frontend (Azure) web application
