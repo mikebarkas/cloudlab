@@ -1,0 +1,5 @@
+---
+
+jenkins:
+  hosts:
+    your_ip_addr_here
