@@ -1,0 +1,10 @@
+---
+# API playbook
+
+- hosts: api
+  become: true
+  roles:
+    - api
+
+  vars_files:
+    - roles/api/vars/api.yml

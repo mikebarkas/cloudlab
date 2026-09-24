@@ -1,0 +1,48 @@
+- name: Stop Cockpit services
+  tags:
+    - disable-cockpit
+  service:
+    name: "{{ item }}"
+    state: stopped
+  with_items:
+    - cockpit
+    - cockpit.socket
+  ignore_errors: true
+
+- name: Disable Cockpit services
+  tags:
+    - disable-cockpit
+  service:
+    name: "{{ item }}"
+    enabled: false
+  with_items:
+    - cockpit
+    - cockpit.socket
+  ignore_errors: true
+
+- name: Remove Cockpit package
+  tags:
+    - disable-cockpit
+  package:
+    name: cockpit
+    state: absent
+  ignore_errors: true
+
+- name: Remove Cockpit socket package
+  tags:
+    - disable-cockpit
+  package:
+    name: cockpit-systemd
+    state: absent
+  ignore_errors: true
+
+- name: Disable cockpit service in firewalld
+  tags:
+    - disable-cockpit
+  firewalld:
+    service: cockpit
+    permanent: true
+    state: disabled
+  when: ansible_distribution == "Fedora"
+  notify:
+    - firewalld reload

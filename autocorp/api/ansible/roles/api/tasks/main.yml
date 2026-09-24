@@ -1,0 +1,102 @@
+# Tags:
+# init -- for initial install and starting service
+# compose-up -- for starting service
+# compose-down -- for stopping service
+
+- name: install dependencies
+  tags:
+    - init
+    - install
+  apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg-agent
+      - software-properties-common
+    state: latest
+    update_cache: true
+
+- name: GPG key
+  tags:
+    - init
+    - install
+  apt_key:
+    url: https://download.docker.com/linux/debian/gpg
+    state: present
+
+- name: repository docker
+  tags:
+    - init
+    - install
+  apt_repository:
+    repo: deb https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
+    state: present
+
+- name: install docker
+  tags:
+    - init
+    - install
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+    state: latest
+    update_cache: yes
+
+- name: adding admin docker group
+  tags:
+    - init
+    - install
+  user:
+    name: "{{ admin_user }}"
+    groups: ["docker"]
+    append: yes
+
+- name: Install docker-compose
+  tags:
+    - init
+    - install
+    - install--docker-compose
+  get_url:
+    url: "{{ docker_compose_url }}"
+    dest: /usr/local/bin/docker-compose
+    mode: 'a+x'
+
+- name: Clone repo
+  tags:
+    - init
+    - clone
+  ansible.builtin.git:
+    repo: "{{ api_repo }}"
+    dest: /opt/api
+    single_branch: true
+    version: main
+
+- name: Build local image
+  tags:
+    - init
+    - build-image
+  community.docker.docker_image:
+    name: auto-api
+    build:
+      path: /opt/api/
+      args:
+        listen_port: 8080
+    source: build
+
+- name: Run Docker compose up
+  tags:
+    - init
+    - compose-up
+  ansible.builtin.shell: docker-compose up -d
+  args:
+    chdir: /opt/api
+
+- name: Run Docker compose down
+  tags:
+    - compose-down
+  ansible.builtin.shell: docker-compose down
+  args:
+    chdir: /opt/api

@@ -1,0 +1,215 @@
+---
+
+# Include task to disable cockpit.
+- name: include disable-cockpit task
+  ansible.builtin.include_tasks:
+    file: disable-cockpit.yml
+    apply:
+      tags:
+        - disable-cockpit
+  tags:
+    - disable-cockpit
+
+# Setup Jenkins on a Fedora system.
+
+- name: update repo
+  tags:
+    - install-software
+  ansible.builtin.get_url:
+    url: "{{ rpm_repo }}"
+    dest: /etc/yum.repos.d/jenkins.repo
+
+- name: import jenkins key
+  tags:
+    - install-software
+  ansible.builtin.rpm_key:
+    state: present
+    key: "{{ rpm_key }}"
+
+- name:  update
+  tags:
+    - install-software
+  ansible.builtin.dnf:
+    name: '*'
+    state: latest
+    update_cache: true
+
+- name: install software
+  tags:
+    - install-software
+  ansible.builtin.dnf:
+    name:
+      - fontconfig
+      - java-17-openjdk
+      - jenkins
+      - git
+      - docker
+      - nginx
+    state: latest
+
+- name: reload systemd config
+  tags:
+    - install-software
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: start systemd jenkins
+  tags:
+    - start-jenkins
+  ansible.builtin.systemd:
+    name: jenkins.service
+    state: started
+    enabled: true
+
+- name: start systemd docker
+  tags:
+    - start-docker
+  ansible.builtin.systemd:
+    name: docker.service
+    state: started
+    enabled: true
+
+- name: Allow https service in firewalld
+  tags:
+    - firewall-service
+  firewalld:
+    service: https
+    permanent: true
+    state: enabled
+  when: ansible_distribution == "Fedora"
+  notify:
+    - firewalld reload
+
+- name: Create ssl directory
+  tags:
+    - copy-ssl-files
+  ansible.builtin.file:
+    path: "{{ ssl_crt_dir }}"
+    state: directory
+    owner: nginx
+    group: nginx
+    mode: '0744'
+
+- name: Copy ssl cert
+  tags:
+    - copy-ssl-files
+  ansible.builtin.copy:
+    src: "{{ ssl_crt_src }}"
+    dest: "{{ ssl_crt_dest }}"
+    owner: nginx
+    group: nginx
+    mode: '0644'
+
+- name: Copy ssl key
+  tags:
+    - copy-ssl-files
+  ansible.builtin.copy:
+    src: "{{ ssl_key_src }}"
+    dest: "{{ ssl_key_dest }}"
+    owner: nginx
+    group: nginx
+    mode: '0644'
+
+- name: Copy nginx config
+  tags:
+    - nginx-config
+  ansible.builtin.copy:
+    src: "{{ nginx_config_src }}"
+    dest: "{{ nginx_config_dest }}"
+    owner: nginx
+    group: nginx
+    mode: '0644'
+    backup: true
+
+- name: Copy nginx-jenkins config
+  tags:
+    - nginx-config
+    - nginx-jenkins-config
+  ansible.builtin.copy:
+    src: "{{ nginx_jenkins_config_src }}"
+    dest: "{{ nginx_jenkins_config_dest }}"
+    owner: nginx
+    group: nginx
+    mode: '0644'
+
+- name: create jenkins user
+  tags:
+    - create-users
+    - create-jenkins
+  user:
+    name: "{{ jenkins_name }}"
+    append: true
+    groups: ["docker"]
+    system: true
+
+- name: create admin user
+  tags:
+    - create-users
+    - create-admin
+  user:
+    name: "{{ admin_name }}"
+    password: "{{ admin_passwd }}"
+    append: true
+    groups: ["wheel"]
+
+- name: add ssh key for admin
+  tags:
+    - create-users
+    - create-admin
+  authorized_key:
+    user: "{{ admin_name }}"
+    key: "{{ ssh_public_key }}"
+
+- name: add admin to sudoers
+  tags:
+    - create-users
+    - create-admin
+  community.general.sudoers:
+    name: admin-user
+    user: "{{ admin_name }}"
+    commands: ALL
+    nopassword: false
+
+- name: sshd config - no root and passwd
+  tags:
+    - ssh-no-root
+  ansible.builtin.copy:
+    src: "{{ sshd_config_src }}"
+    dest: "{{ sshd_config_dest }}"
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: restart systemd sshd
+  tags:
+    - restart-sshd
+    - ssh-no-root
+  ansible.builtin.systemd:
+    name: sshd.service
+    state: restarted
+
+- name: selinux-httpd_can_network_connect persistent
+  tags:
+    - nginx-selinux
+    - nginx-config
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+
+- name: selinux-httpd_can_network_relay persistent
+  tags:
+    - nginx-selinux
+    - nginx-config
+  ansible.posix.seboolean:
+    name: httpd_can_network_relay
+    state: true
+    persistent: true
+
+- name: start systemd nginx
+  tags:
+    - start-nginx
+  ansible.builtin.systemd:
+    name: nginx.service
+    state: started
+    enabled: true
