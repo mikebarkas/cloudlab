@@ -1,17 +1,19 @@
 terraform {
   required_providers {
     cloudflare = {
-      source = "cloudflare/cloudflare"
+      source  = "cloudflare/cloudflare"
       version = "~> 4.0"
     }
   }
 }
 
 data "terraform_remote_state" "api" {
-  backend = "local"
+  backend = "s3"
 
   config = {
-    path = "../api/terraform/terraform.tfstate"
+    bucket = "cloudlab-terraform-state-mikebarkas"
+    key    = "autocorp/api/terraform.tfstate"
+    region = "us-east-1"
   }
 }
 
@@ -21,9 +23,9 @@ provider "cloudflare" {
 
 resource "cloudflare_record" "api" {
   zone_id = var.zone_id
-  name = var.api-name
+  name    = var.api-name
   content = data.terraform_remote_state.api.outputs["public-ip"]
-  type = var.type
-  ttl = 3600
+  type    = var.type
+  ttl     = 3600
   comment = "Points to AWS EC2"
 }
