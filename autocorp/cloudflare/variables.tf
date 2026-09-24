@@ -1,25 +1,25 @@
 
 variable "api_token" {
   description = "The API token for the account"
-  type = string
+  type        = string
 }
 
 variable "zone_id" {
   description = "The zone id"
-  type = string
+  type        = string
 }
 
 variable "api-name" {
   description = "The subdomain for the api"
-  type = string
+  type        = string
 }
 
 variable "value" {
   description = "The IP address value"
-  type = string
+  type        = string
 }
 
 variable "type" {
   description = "The record type: A, AAAA, CNAME"
-  type = string
+  type        = string
 }
