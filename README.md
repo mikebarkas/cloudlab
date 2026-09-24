@@ -13,7 +13,7 @@ I primarily use AWS for most projects and for practicing for certifications. I a
 
 | Project | Description | Tools | Status |
 |---|---|---|---|
-| [AutoCorp](autocorp/) | Go API and Postgres on EC2, with DNS records managed in Cloudflare. Moved here from `auto-corp-infra` with its full history. | Terraform, Ansible, Docker, Cloudflare | Active: web front end in Azure |
+| [AutoCorp](autocorp/) | Go API and Postgres on EC2, with DNS records managed in Cloudflare. Moved here from `auto-corp-infra` with its full history. | Terraform, Ansible, Docker, Cloudflare | Active |
 | [Jenkins](infra/jenkins/) | Jenkins controller behind an Nginx reverse proxy on a Linux server | Terraform, Ansible, Linode | Complete |
 
 ### Planned

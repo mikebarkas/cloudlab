@@ -32,3 +32,7 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# Keys and certs
+*.key
+*.crt
+*.pem
