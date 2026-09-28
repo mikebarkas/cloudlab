@@ -82,8 +82,10 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v6
         with:
-          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          # A secret, so the account ID in the ARN is masked in logs
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
           aws-region: us-east-1
+          mask-aws-account-id: true
 
       - name: terraform init
         run: terraform init -input=false
@@ -106,8 +108,13 @@ jobs:
           DIR: ${{ matrix.dir }}
           OUTCOME: ${{ steps.plan.outcome }}
         run: |
+          # Log masking does not apply to PR comments: hide the account ID
+          # and drop the noisy "Refreshing state" lines
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          sed -e '/: Refreshing state\.\.\./d' -e "s/$account_id/***/g" plan.txt > plan-public.txt
+
           marker="<!-- terraform-plan: $DIR -->"
-          summary=$(grep -E '^(Plan:|No changes)' plan.txt || echo "Plan failed, see details")
+          summary=$(grep -E '^(Plan:|No changes)' plan-public.txt || echo "Plan failed, see details")
           if [ "$OUTCOME" = "success" ]; then status="✅"; else status="❌"; fi
 
           {
@@ -118,9 +125,9 @@ jobs:
             echo "<details><summary>Show plan</summary>"
             echo
             echo '```'
-            head -c 60000 plan.txt
+            head -c 60000 plan-public.txt
             echo '```'
-            if [ "$(wc -c < plan.txt)" -gt 60000 ]; then
+            if [ "$(wc -c < plan-public.txt)" -gt 60000 ]; then
               echo "Output truncated, see the job log for the full plan."
             fi
             echo "</details>"
