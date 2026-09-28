@@ -26,3 +26,13 @@ variable "tags" {
     auto-corp = "demo"
   }
 }
+
+variable "admin_cidr" {
+  description = "CIDR allowed to SSH to the instance, public IP as x.x.x.x/32"
+  type = string
+
+  validation {
+    condition     = can(cidrnetmask(var.admin_cidr))
+    error_message = "admin_cidr must be an IPv4 CIDR, e.g. 203.0.113.10/32."
+  }
+}
