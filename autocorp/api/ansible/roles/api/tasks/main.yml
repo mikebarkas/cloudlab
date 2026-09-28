@@ -2,6 +2,7 @@
 # init -- for initial install and starting service
 # compose-up -- for starting service
 # compose-down -- for stopping service
+# proxy -- for installing and configuring Caddy
 
 - name: install dependencies
   tags:
@@ -14,6 +15,7 @@
       - curl
       - gnupg-agent
       - software-properties-common
+      - python3-debian
     state: latest
     update_cache: true
 
@@ -100,3 +102,43 @@
   ansible.builtin.shell: docker-compose down
   args:
     chdir: /opt/api
+
+- name: Caddy repository
+  tags:
+    - init
+    - proxy
+  ansible.builtin.deb822_repository:
+    name: caddy-stable
+    types: deb
+    uris: https://dl.cloudsmith.io/public/caddy/stable/deb/debian
+    suites: any-version
+    components: main
+    signed_by: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+
+- name: Install Caddy
+  tags:
+    - init
+    - proxy
+  apt:
+    name: caddy
+    state: present
+    update_cache: true
+
+- name: Caddyfile reverse proxy to the API
+  tags:
+    - init
+    - proxy
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    mode: '0644'
+  notify: reload caddy
+
+- name: Start Caddy
+  tags:
+    - init
+    - proxy
+  ansible.builtin.systemd:
+    name: caddy
+    state: started
+    enabled: true
