@@ -49,3 +49,43 @@ jobs:
       # Report warnings, but fail only on errors until provider versions are pinned
       - name: tflint
         run: tflint --config "$GITHUB_WORKSPACE/.tflint.hcl" --minimum-failure-severity=error --format compact
+
+  # Plan against real state, using a read-only role through OIDC
+  plan:
+    name: plan (${{ matrix.dir }})
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token for AWS
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - account/budget
+          - autocorp/api/terraform
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+      TF_VAR_admin_cidr: ${{ secrets.ADMIN_CIDR }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      - name: terraform plan
+        run: terraform plan -input=false -no-color -lock-timeout=60s
