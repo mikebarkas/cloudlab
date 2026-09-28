@@ -30,6 +30,7 @@ variable "tags" {
 variable "admin_cidr" {
   description = "CIDR allowed to SSH to the instance, public IP as x.x.x.x/32"
   type        = string
+  sensitive   = true
 
   validation {
     condition     = can(cidrnetmask(var.admin_cidr))
