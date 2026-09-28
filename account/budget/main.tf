@@ -21,6 +21,7 @@ provider "aws" {
 variable "budget_email" {
   description = "Email address that receives budget alerts"
   type        = string
+  sensitive   = true
 }
 
 # Monthly cost budget for the whole account.
