@@ -59,7 +59,8 @@ resource "aws_route_table_association" "rta" {
   subnet_id      = aws_subnet.auto-corp-subnet.id
 }
 
-# Create security group for ports: 22, 80, 443
+# Create security group for ports: 22 (admin only), 80, 443
+# The API listens on 8080 behind Caddy and is not exposed
 resource "aws_security_group" "auto-corp-sg" {
   name        = "allow_web_traffic"
   description = "Allow web inbound traffic"
@@ -73,18 +74,18 @@ resource "aws_security_group" "auto-corp-sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    description = "HTTP"
-    from_port   = 8080
-    to_port     = 8080
+    description = "HTTP for ACME challenge and redirect to HTTPS"
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
   ingress {
-    description = "SSH"
+    description = "SSH from admin only"
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.admin_cidr]
   }
 
   egress {
