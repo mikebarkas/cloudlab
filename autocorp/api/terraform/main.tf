@@ -136,19 +136,19 @@ resource "aws_ec2_instance_state" "auto-corp-api" {
   state       = "running"
 }
 
-# Assign Elastic IP to network interface
+# Allocate an Elastic IP
 resource "aws_eip" "auto-corp-eip" {
-  network_interface         = aws_network_interface.auto-corp-nic.id
-  associate_with_private_ip = "10.0.1.55"
-  instance = aws_instance.auto-corp-ec2.id
-
-  # The gateway must exist before the nic
-  depends_on = [aws_internet_gateway.auto-corp-gateway]
+  domain = "vpc"
 
   tags = var.tags
 }
 
+# Associate the Elastic IP with the network interface
 resource "aws_eip_association" "ip_assoc" {
-  instance_id = aws_instance.auto-corp-ec2.id
-  allocation_id = aws_eip.auto-corp-eip.id
+  allocation_id        = aws_eip.auto-corp-eip.id
+  network_interface_id = aws_network_interface.auto-corp-nic.id
+  private_ip_address   = "10.0.1.55"
+
+  # The VPC needs an internet gateway before an EIP can be associated
+  depends_on = [aws_internet_gateway.auto-corp-gateway]
 }
