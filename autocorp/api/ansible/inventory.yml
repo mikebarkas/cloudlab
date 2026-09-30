@@ -1,5 +1,9 @@
 ---
 
+# DNS name from the Cloudflare stack, so no IP is committed
 api:
   hosts:
-    ip-address
+    api.mikebarkas.com:
+  vars:
+    ansible_user: admin
+    ansible_python_interpreter: /usr/bin/python3

@@ -36,3 +36,6 @@ terraform.rc
 *.key
 *.crt
 *.pem
+
+# Ansible vars files with secrets (e.g. db_password)
+secrets.yml
