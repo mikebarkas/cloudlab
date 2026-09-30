@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.11"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
     }
   }
 
@@ -16,6 +19,14 @@ terraform {
 
 provider "aws" {
   region = "us-east-1"
+
+  default_tags {
+    tags = {
+      Project   = "cloudlab"
+      Stack     = "account-budget"
+      ManagedBy = "terraform"
+    }
+  }
 }
 
 variable "budget_email" {

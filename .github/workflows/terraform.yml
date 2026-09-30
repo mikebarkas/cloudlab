@@ -46,9 +46,8 @@ jobs:
       - name: terraform validate
         run: terraform validate -no-color
 
-      # Report warnings, but fail only on errors until provider versions are pinned
       - name: tflint
-        run: tflint --config "$GITHUB_WORKSPACE/.tflint.hcl" --minimum-failure-severity=error --format compact
+        run: tflint --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
 
   # Plan against real state, using a read-only role through OIDC
   plan:

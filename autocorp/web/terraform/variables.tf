@@ -1,32 +1,32 @@
 variable "subscription_id" {
   description = "The Azure subscription ID"
-  type = string
+  type        = string
 }
 
 variable "registry_server" {
   description = "This is the container registry"
-  type = string
-  default = "index.docker.io"
+  type        = string
+  default     = "index.docker.io"
 }
 variable "registry_username" {
   description = "Authenticate to the container registry"
-  type = string
+  type        = string
 }
 variable "registry_passwd" {
   description = "Authenticate to the container registry"
-  type = string
+  type        = string
 }
 
 variable "container_name" {
   description = "The name for your container"
-  type = string
+  type        = string
 }
 variable "container_image" {
   description = "The image to use in the container"
-  type = string
+  type        = string
 }
 
 variable "api_url" {
   description = "An environment variable for the endpoint to the api"
-  type = string
+  type        = string
 }

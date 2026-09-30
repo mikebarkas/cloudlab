@@ -2,7 +2,7 @@
 variable "instance_type" {
   description = "The type of EC2 instance"
   type        = string
-  default     = "t2.micro"
+  default     = "t3.micro"
 }
 
 variable "availability_zone" {
@@ -23,7 +23,9 @@ variable "tags" {
   type        = map(string)
   default = {
     Name      = "AutoCorp API"
-    auto-corp = "demo"
+    Project   = "cloudlab"
+    Stack     = "autocorp-api"
+    ManagedBy = "terraform"
   }
 }
 
