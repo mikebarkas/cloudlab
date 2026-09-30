@@ -23,7 +23,9 @@ variable "tags" {
   type        = map(string)
   default = {
     Name      = "AutoCorp API"
-    auto-corp = "demo"
+    Project   = "cloudlab"
+    Stack     = "autocorp-api"
+    ManagedBy = "terraform"
   }
 }
 
