@@ -1,7 +1,10 @@
 terraform {
+  required_version = ">= 1.11"
+
   required_providers {
     aws = {
-      source = "hashicorp/aws"
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
     }
   }
 
@@ -16,20 +19,31 @@ terraform {
 
 provider "aws" {
   region = "us-east-1"
+
+  default_tags {
+    tags = var.tags
+  }
+}
+
+# Latest official Debian 12 image (Debian's AWS account)
+data "aws_ami" "debian" {
+  most_recent = true
+  owners      = ["136693071363"]
+
+  filter {
+    name   = "name"
+    values = ["debian-12-amd64-*"]
+  }
 }
 
 # Create VPC
 resource "aws_vpc" "auto-corp-vpc" {
   cidr_block = "10.0.0.0/16"
-
-  tags = var.tags
 }
 
 # Create Internet gateway
 resource "aws_internet_gateway" "auto-corp-gateway" {
   vpc_id = aws_vpc.auto-corp-vpc.id
-
-  tags = var.tags
 }
 
 # Create custom route table
@@ -40,8 +54,6 @@ resource "aws_route_table" "auto-corp-route-table" {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.auto-corp-gateway.id
   }
-
-  tags = var.tags
 }
 
 # Create a subnet
@@ -49,8 +61,6 @@ resource "aws_subnet" "auto-corp-subnet" {
   vpc_id            = aws_vpc.auto-corp-vpc.id
   cidr_block        = "10.0.1.0/24"
   availability_zone = var.availability_zone
-
-  tags = var.tags
 }
 
 # Associate subnet with route table
@@ -94,8 +104,6 @@ resource "aws_security_group" "auto-corp-sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = var.tags
 }
 
 # Create network interface with IP in the subnet
@@ -103,23 +111,11 @@ resource "aws_network_interface" "auto-corp-nic" {
   subnet_id       = aws_subnet.auto-corp-subnet.id
   private_ips     = ["10.0.1.55"]
   security_groups = [aws_security_group.auto-corp-sg.id]
-
-  tags = var.tags
 }
 
 # Create server instance
 resource "aws_instance" "auto-corp-ec2" {
-  # Fedora 38
-  # ami = "ami-01752495da7056fa9"
-
-  # RHEL 9 -- x86-64
-  # ami = "ami-026ebd4cfe2c043b2"
-
-  # Debian 12 -- x86-64
-  ami = "ami-06db4d78cb1d3bbf9"
-
-  # Ubuntu 22.04 -- x86-64
-  # ami = "ami-053b0d53c279acc90"
+  ami               = data.aws_ami.debian.id
   instance_type     = var.instance_type
   availability_zone = var.availability_zone
   key_name          = var.key_name
@@ -129,7 +125,11 @@ resource "aws_instance" "auto-corp-ec2" {
     network_interface_id = aws_network_interface.auto-corp-nic.id
   }
 
-  tags = var.tags
+  # Without this, a new Debian image would replace the instance on the next apply.
+  # Replace it on purpose with: terraform apply -replace=aws_instance.auto-corp-ec2
+  lifecycle {
+    ignore_changes = [ami]
+  }
 }
 
 resource "aws_ec2_instance_state" "auto-corp-api" {
@@ -140,8 +140,6 @@ resource "aws_ec2_instance_state" "auto-corp-api" {
 # Allocate an Elastic IP
 resource "aws_eip" "auto-corp-eip" {
   domain = "vpc"
-
-  tags = var.tags
 }
 
 # Associate the Elastic IP with the network interface
