@@ -14,11 +14,6 @@ variable "api-name" {
   type        = string
 }
 
-variable "value" {
-  description = "The IP address value"
-  type        = string
-}
-
 variable "type" {
   description = "The record type: A, AAAA, CNAME"
   type        = string

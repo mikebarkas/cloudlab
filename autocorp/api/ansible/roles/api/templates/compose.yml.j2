@@ -1,0 +1,51 @@
+# Managed by Ansible
+# DB_PASSWORD comes from .env in this directory
+
+services:
+  auto-api:
+    image: {{ api_image }}:{{ api_image_tag }}
+    container_name: auto-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGUSER: db_admin
+      PGPASSWORD: ${DB_PASSWORD}
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: auto_db
+    # Localhost only: Caddy on the host proxies 443 to this port
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks:
+      - auto-net
+
+  # No published ports: only the API reaches Postgres, over the compose network
+  db:
+    image: postgres:{{ postgres_image_tag }}
+    container_name: auto-db
+    hostname: db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: db_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - auto-vol:/var/lib/postgresql/data
+      - ./db/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./db/seed.sh:/docker-entrypoint-initdb.d/seed.sh:ro
+    # Over TCP: the temporary server Postgres runs during first-start init is socket-only
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "db_admin", "-d", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auto-net
+
+volumes:
+  auto-vol:
+
+networks:
+  auto-net:
