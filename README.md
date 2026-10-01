@@ -7,14 +7,101 @@ Most projects are built with Terraform and provisioned with Ansible.
 Hybrid cloud infrastructure combines my cloudlab and homelab.
 
 ## Cloud Providers
-I primarily use AWS for most projects and for practicing for certifications. I also like to use Linode services. Some of my projects run containers in Azure as well.
+
+AWS is my primary platform. The Jenkins project runs on Linode. `autocorp/web/terraform` is an earlier version of the AutoCorp front end on Azure Container Instances; it is kept for reference and not deployed.
 
 ## Projects
 
 | Project | Description | Tools | Status |
 |---|---|---|---|
-| [AutoCorp](autocorp/) | Go API and Postgres on EC2, with DNS records managed in Cloudflare. Moved here from `auto-corp-infra` with its full history. | Terraform, Ansible, Docker, Cloudflare | Active |
+| [AutoCorp](autocorp/) | Go API, Python web app, and Postgres running in Docker Compose on one EC2 instance, behind Caddy with automatic TLS. DNS records in Cloudflare. Moved here from `auto-corp-infra` with its full history. | Terraform, Ansible, Docker Compose, Caddy, Cloudflare, GitHub Actions | Active |
 | [Jenkins](infra/jenkins/) | Jenkins controller behind an Nginx reverse proxy on a Linux server | Terraform, Ansible, Linode | Complete |
+
+## AutoCorp on AWS
+
+> **Status:** https://autocorp.mikebarkas.com
+
+### Architecture
+
+```mermaid
+flowchart LR
+    browser([Browser]) -->|HTTPS| dns["Cloudflare DNS<br/>autocorp.mikebarkas.com<br/>api.mikebarkas.com"]
+    dns --> eip["Elastic IP"]
+
+    subgraph aws["AWS us-east-1 · VPC 10.0.0.0/16 · public subnet 10.0.1.0/24"]
+        eip --> caddy
+        subgraph ec2["EC2 t3.micro · Debian 12 · Docker Compose"]
+            caddy["Caddy :443<br/>Let's Encrypt TLS"] --> web["auto-web :8081<br/>Python"]
+            caddy --> api["auto-api :8080<br/>Go"]
+            web -->|"http://auto-api:8080"| api
+            api --> db[("Postgres 17")]
+        end
+    end
+```
+
+- The security group allows 80 and 443 from anywhere and 22 from one admin CIDR. Only Caddy publishes ports; the API, web app, and Postgres are reachable only on the compose network.
+- Around the app: Terraform state in an encrypted S3 bucket, a read-only GitHub Actions role (OIDC) that posts `terraform plan` on pull requests, and a $25/month AWS Budget.
+
+### What each directory provisions
+
+| Directory | Provisions | Terraform state |
+|---|---|---|
+| `account/bootstrap` | S3 bucket for Terraform state: versioned, encrypted, public access blocked | Local (the bucket can't hold its own state) |
+| `account/budget` | $25/month AWS Budget with email alerts | S3 |
+| `account/github-oidc` | GitHub OIDC provider and the read-only plan role for pull requests | S3 |
+| `autocorp/api/terraform` | VPC, subnet, internet gateway, route table, security group, network interface, EC2 instance, Elastic IP | S3 |
+| `autocorp/cloudflare` | DNS A records for the API and web subdomains, pointing at the Elastic IP | Local |
+| `autocorp/api/ansible` | Docker and the compose plugin, then the compose stack: Caddy, API, web app, Postgres | n/a |
+| `autocorp/web/terraform` | Earlier Azure version of the web app (not deployed) | Local |
+
+### Deploy
+
+Apply in this order. Values that aren't committed (admin CIDR, SSH key name, alert email, Cloudflare token and zone, database password) come from `.tfvars` files, `TF_VAR_` environment variables, or `secrets.yml`, all gitignored.
+
+```bash
+# 1. Account setup, once
+cd account/bootstrap   && terraform init && terraform apply
+cd ../budget           && terraform init && terraform apply
+cd ../github-oidc      && terraform init && terraform apply
+
+# 2. Network and server
+cd ../../autocorp/api/terraform && terraform init && terraform apply
+
+# 3. DNS records pointing at the new Elastic IP
+cd ../../cloudflare && terraform init && terraform apply
+
+# 4. Containers
+cd ../api/ansible
+ansible-galaxy collection install -r requirements.yml
+ansible-playbook api.yml -e @secrets.yml
+
+# 5. Check
+curl https://api.mikebarkas.com/json
+```
+
+### Tear down
+
+```bash
+cd autocorp/cloudflare     && terraform destroy
+cd ../api/terraform        && terraform destroy
+```
+
+The account stacks stay: the state bucket holds every stack's state, and the budget is free.
+
+### Cost
+
+Estimated on-demand prices in us-east-1, running 24/7:
+
+| Item | Monthly |
+|---|---|
+| EC2 t3.micro | ~$7.60 |
+| Public IPv4 address (Elastic IP) | ~$3.65 |
+| EBS root volume (~8 GiB gp3) | ~$0.65 |
+| S3 Terraform state | < $0.05 |
+| AWS Budget (first two per account are free) | $0 |
+| Cloudflare DNS, Let's Encrypt, GitHub Actions (public repo) | $0 |
+| **Total while running** | **~$12** |
+| **Total when torn down** | **< $0.05** (state bucket only) |
 
 ## Terraform Remote State
 
@@ -74,6 +161,14 @@ Why things are built the way they are, and what each choice trades off.
 - **Caddy reverse proxy on 443 in front of the API.** Caddy gets and renews Let's Encrypt certificates on its own. The API listens on 8080, which the security group does not expose.
 - **SSH limited to one admin CIDR** instead of `0.0.0.0/0`. Trade-off: the rule needs updating when my IP changes.
 - **One Elastic IP association**, via `aws_eip_association` on the network interface. Associating the same address in two places can cause drift between plans.
+- **The web app calls the API over the compose network** (`API_URL=http://auto-api:8080/search`), not the public `api.mikebarkas.com`. It's faster, skips a TLS round trip, and keeps working if DNS or the certificate has a problem.
+
+### Deployment
+
+- **Images are pulled from Docker Hub, not built on the server.** The API (`mikebarkas/auto-corp-api`) and web app (`mikebarkas/auto-corp-web`) use pinned tags, so every deploy runs the same version until the tag is changed on purpose.
+- **Caddy runs as a container, not an apt package.** Caddy's third-party apt signing key expired and blocked deploys ([#36](https://github.com/mikebarkas/cloudlab/issues/36)). The official image removes that dependency, and pinning the major version (`caddy:2`) keeps upgrades deliberate.
+- **Postgres is pinned to major version 17.** Postgres 18 changes the data directory layout, so a major upgrade has to be planned, not picked up by accident.
+- **The database password is never committed.** Ansible takes it from `secrets.yml` (gitignored) or `-e`, and writes it to a `.env` file on the server for Compose.
 
 ### CI/CD
 
@@ -85,6 +180,18 @@ Why things are built the way they are, and what each choice trades off.
 ### Cost
 
 - **$25/month AWS Budget**, alerting at 50% and 80% of actual spend and 100% of forecasted spend. The forecast alert warns before the limit is reached, not after.
+
+## What I would do next in production
+
+This is a single-instance lab sized for a $25/month budget. For production traffic I would change:
+
+- **High availability:** an Application Load Balancer and an Auto Scaling group across two availability zones, instead of one instance with an Elastic IP.
+- **Private subnets:** app instances in private subnets behind the load balancer, with a NAT gateway for outbound traffic.
+- **Managed database:** Amazon RDS for Postgres with automated backups and Multi-AZ, instead of Postgres in a container on the app server.
+- **Secrets:** AWS Secrets Manager or SSM Parameter Store instead of a `.env` file.
+- **Access:** SSM Session Manager instead of SSH, so port 22 closes entirely.
+- **Observability:** container logs in CloudWatch Logs ([#21](https://github.com/mikebarkas/cloudlab/issues/21)) and alarms on instance health ([#22](https://github.com/mikebarkas/cloudlab/issues/22)).
+- **Deploys:** apply through a GitHub Actions job behind a manual approval ([#30](https://github.com/mikebarkas/cloudlab/issues/30)), and images built and scanned in CI.
 
 ## Related repositories
 

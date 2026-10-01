@@ -1,24 +1,30 @@
-# Auto Corp Infrastructure
+# AutoCorp
 
-----
-This repo is used for practicing Infrastructure As Code concepts.
+Infrastructure for AutoCorp, a practice project built around a fictitious automobile company that provides sample data.
 
-Automobile Corporation is a fictitious company for this project to provide sample data.
+## What runs where
 
-## Infrastructure Overview
+- **AWS:** one EC2 instance runs the whole app in Docker Compose: Caddy (TLS on 443), the Go API, the Python web app, and Postgres.
+- **Cloudflare:** DNS records for the API and web subdomains point at the instance's Elastic IP.
+- **Azure (not deployed):** `web/terraform` is an earlier version of the web app on Azure Container Instances, kept for reference.
 
-The back-end API runs in AWS.
+## Directories
 
-A front-end web app runs in Azure.
+| Directory | Purpose |
+|---|---|
+| `api/terraform` | VPC, subnet, security group, EC2 instance, Elastic IP |
+| `api/ansible` | Installs Docker and deploys the compose stack |
+| `cloudflare` | DNS records |
+| `web/terraform` | Earlier Azure deployment of the web app (not deployed) |
+| `jenkins` | Jenkins server from the original auto-corp-infra repo |
 
-### Technologies
+Architecture, deploy order, costs, and design decisions are in the [main README](../README.md#autocorp-on-aws).
 
-Terraform builds the infrastructure
+## Application repositories
 
-Ansible is used as needed for provisioning
+- [auto-corp-api](https://github.com/mikebarkas/auto-corp-api): Go API with Postgres
+- [auto-corp-web](https://github.com/mikebarkas/auto-corp-web): Python web front end
 
-Containers are used to run custom images for the applications
+---
 
-
-----
 This project is for educational purposes only.
