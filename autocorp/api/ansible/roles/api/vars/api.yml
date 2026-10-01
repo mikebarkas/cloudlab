@@ -2,14 +2,17 @@
 
 # Default user on the Debian AMI
 admin_user: admin
-# DNS record from the Cloudflare stack
+# DNS records from the Cloudflare stack
 api_domain: api.mikebarkas.com
+web_domain: autocorp.mikebarkas.com
 
 app_dir: /opt/auto-corp
 
 # Multi-arch (amd64 + arm64) image on Docker Hub
 api_image: mikebarkas/auto-corp-api
 api_image_tag: "0.4"
+web_image: mikebarkas/auto-corp-web
+web_image_tag: "1.3"
 
 # Pinned major version: Postgres 18 changes the data directory layout
 postgres_image_tag: "17"
