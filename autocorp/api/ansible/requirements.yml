@@ -1,6 +1,6 @@
 ---
 # ansible-galaxy collection install -r requirements.yml
 collections:
-  # docker_compose_v2 needs 3.6.0 or newer
+  # docker_compose_v2_exec (Caddy reload handler) needs 3.13.0 or newer
   - name: community.docker
-    version: ">=3.6.0,<6.0.0"
+    version: ">=3.13.0,<6.0.0"
