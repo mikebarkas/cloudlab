@@ -2,7 +2,7 @@
 # init -- for initial install and starting service
 # compose-up -- for starting service
 # compose-down -- for stopping service (only runs when asked for with --tags)
-# proxy -- for installing and configuring Caddy
+# proxy -- for updating the Caddyfile (Caddy runs in the compose stack)
 
 - name: Check required variables
   tags:
@@ -73,6 +73,7 @@
   loop:
     - "{{ app_dir }}"
     - "{{ app_dir }}/db"
+    - "{{ app_dir }}/caddy"
 
 # Postgres runs these once, when its data volume is empty
 - name: Database init scripts
@@ -107,6 +108,18 @@
     mode: '0600'
   no_log: true
 
+# Mounted into the Caddy container as a directory (see compose.yml.j2)
+- name: Caddyfile
+  tags:
+    - init
+    - deploy
+    - proxy
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ app_dir }}/caddy/Caddyfile"
+    mode: '0644'
+  notify: reload caddy
+
 - name: Run Docker compose up
   tags:
     - init
@@ -124,43 +137,3 @@
   community.docker.docker_compose_v2:
     project_src: "{{ app_dir }}"
     state: absent
-
-- name: Caddy repository
-  tags:
-    - init
-    - proxy
-  ansible.builtin.deb822_repository:
-    name: caddy-stable
-    types: deb
-    uris: https://dl.cloudsmith.io/public/caddy/stable/deb/debian
-    suites: any-version
-    components: main
-    signed_by: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
-
-- name: Install Caddy
-  tags:
-    - init
-    - proxy
-  ansible.builtin.apt:
-    name: caddy
-    state: present
-    update_cache: true
-
-- name: Caddyfile reverse proxy to the API
-  tags:
-    - init
-    - proxy
-  ansible.builtin.template:
-    src: Caddyfile.j2
-    dest: /etc/caddy/Caddyfile
-    mode: '0644'
-  notify: reload caddy
-
-- name: Start Caddy
-  tags:
-    - init
-    - proxy
-  ansible.builtin.systemd:
-    name: caddy
-    state: started
-    enabled: true

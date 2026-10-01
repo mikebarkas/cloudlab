@@ -2,6 +2,27 @@
 # DB_PASSWORD comes from .env in this directory
 
 services:
+  # The only service with published ports. Gets and renews Let's Encrypt
+  # certificates and proxies to the other containers by service name.
+  caddy:
+    image: caddy:{{ caddy_image_tag }}
+    container_name: caddy
+    restart: unless-stopped
+    depends_on:
+      - auto-api
+      - auto-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # A directory, not the single file: Ansible replaces the Caddyfile with a new
+      # file, and a single-file bind mount would keep showing the old one
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - auto-net
+
   auto-api:
     image: {{ api_image }}:{{ api_image_tag }}
     container_name: auto-api
@@ -15,9 +36,7 @@ services:
       PGHOST: db
       PGPORT: "5432"
       PGDATABASE: auto_db
-    # Localhost only: Caddy on the host proxies 443 to this port
-    ports:
-      - "127.0.0.1:8080:8080"
+    # No published ports: Caddy reaches it over the compose network
     networks:
       - auto-net
 
@@ -30,9 +49,7 @@ services:
     environment:
       # Server-side calls over the compose network; the browser never uses this URL
       API_URL: http://auto-api:8080/search
-    # Localhost only: Caddy on the host proxies 443 to this port
-    ports:
-      - "127.0.0.1:8081:8081"
+    # No published ports: Caddy reaches it over the compose network
     networks:
       - auto-net
 
@@ -61,6 +78,9 @@ services:
 
 volumes:
   auto-vol:
+  # Certificates and ACME account; kept across restarts to avoid re-issuing
+  caddy-data:
+  caddy-config:
 
 networks:
   auto-net:
