@@ -29,3 +29,13 @@ resource "cloudflare_record" "api" {
   ttl     = 3600
   comment = "Points to AWS EC2"
 }
+
+# Same instance as the API; Caddy routes by hostname
+resource "cloudflare_record" "web" {
+  zone_id = var.zone_id
+  name    = var.web-name
+  content = data.terraform_remote_state.api.outputs["public-ip"]
+  type    = var.type
+  ttl     = 3600
+  comment = "Points to AWS EC2"
+}

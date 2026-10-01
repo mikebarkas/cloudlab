@@ -1,6 +1,10 @@
 # Managed by Ansible
-# Caddy gets and renews the Let's Encrypt certificate for this domain,
-# redirects HTTP to HTTPS, and proxies to the API on localhost
+# Caddy gets and renews a Let's Encrypt certificate for each domain,
+# redirects HTTP to HTTPS, and routes by hostname to containers on localhost
 {{ api_domain }} {
 	reverse_proxy localhost:8080
+}
+
+{{ web_domain }} {
+	reverse_proxy localhost:8081
 }

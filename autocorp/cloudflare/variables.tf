@@ -14,6 +14,11 @@ variable "api-name" {
   type        = string
 }
 
+variable "web-name" {
+  description = "The subdomain for the web app"
+  type        = string
+}
+
 variable "type" {
   description = "The record type: A, AAAA, CNAME"
   type        = string

@@ -21,6 +21,21 @@ services:
     networks:
       - auto-net
 
+  auto-web:
+    image: {{ web_image }}:{{ web_image_tag }}
+    container_name: auto-web
+    restart: unless-stopped
+    depends_on:
+      - auto-api
+    environment:
+      # Server-side calls over the compose network; the browser never uses this URL
+      API_URL: http://auto-api:8080/search
+    # Localhost only: Caddy on the host proxies 443 to this port
+    ports:
+      - "127.0.0.1:8081:8081"
+    networks:
+      - auto-net
+
   # No published ports: only the API reaches Postgres, over the compose network
   db:
     image: postgres:{{ postgres_image_tag }}
