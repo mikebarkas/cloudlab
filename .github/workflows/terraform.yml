@@ -1,0 +1,145 @@
+name: terraform
+
+on:
+  pull_request:
+    paths:
+      - "**.tf"
+      - "**/.terraform.lock.hcl"
+      - ".tflint.hcl"
+      - ".github/workflows/terraform.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  # Static checks only, no AWS access
+  validate:
+    name: validate (${{ matrix.dir }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - account/bootstrap
+          - account/budget
+          - account/github-oidc
+          - autocorp/api/terraform
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+
+      - uses: terraform-linters/setup-tflint@v6
+
+      - name: terraform fmt
+        run: terraform fmt -check -diff
+
+      - name: terraform init
+        run: terraform init -backend=false -input=false
+
+      - name: terraform validate
+        run: terraform validate -no-color
+
+      - name: tflint
+        run: tflint --config "$GITHUB_WORKSPACE/.tflint.hcl" --format compact
+
+  # Plan against real state, using a read-only role through OIDC
+  plan:
+    name: plan (${{ matrix.dir }})
+    needs: validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # request the OIDC token for AWS
+      pull-requests: write # post the plan as a PR comment
+    strategy:
+      fail-fast: false
+      matrix:
+        dir:
+          - account/budget
+          - autocorp/api/terraform
+    defaults:
+      run:
+        working-directory: ${{ matrix.dir }}
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_VAR_budget_email: ${{ secrets.BUDGET_EMAIL }}
+      TF_VAR_admin_cidr: ${{ secrets.ADMIN_CIDR }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "~1.16"
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          # A secret, so the account ID in the ARN is masked in logs
+          role-to-assume: ${{ secrets.AWS_PLAN_ROLE_ARN }}
+          aws-region: us-east-1
+          mask-aws-account-id: true
+
+      - name: terraform init
+        run: terraform init -input=false
+
+      # Keep going on failure so the error is posted to the PR, then fail at the end
+      - name: terraform plan
+        id: plan
+        continue-on-error: true
+        shell: bash
+        run: terraform plan -input=false -no-color -lock-timeout=60s 2>&1 | tee plan.txt
+
+      # One comment per stack, updated in place on each push.
+      # Sensitive variables show as (sensitive value); PR comments are not masked like logs.
+      - name: Comment plan on PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+          DIR: ${{ matrix.dir }}
+          OUTCOME: ${{ steps.plan.outcome }}
+        run: |
+          # Log masking does not apply to PR comments: hide the account ID
+          # and drop the noisy "Refreshing state" lines
+          account_id=$(aws sts get-caller-identity --query Account --output text)
+          sed -e '/: Refreshing state\.\.\./d' -e "s/$account_id/***/g" plan.txt > plan-public.txt
+
+          marker="<!-- terraform-plan: $DIR -->"
+          summary=$(grep -E '^(Plan:|No changes)' plan-public.txt || echo "Plan failed, see details")
+          if [ "$OUTCOME" = "success" ]; then status="✅"; else status="❌"; fi
+
+          {
+            echo "$marker"
+            echo "### $status Terraform plan: \`$DIR\`"
+            echo "$summary"
+            echo
+            echo "<details><summary>Show plan</summary>"
+            echo
+            echo '```'
+            head -c 60000 plan-public.txt
+            echo '```'
+            if [ "$(wc -c < plan-public.txt)" -gt 60000 ]; then
+              echo "Output truncated, see the job log for the full plan."
+            fi
+            echo "</details>"
+          } > comment.md
+
+          id=$(gh api "repos/$REPO/issues/$PR/comments" --paginate \
+            --jq ".[] | select(.body | startswith(\"$marker\")) | .id" | head -1)
+          if [ -n "$id" ]; then
+            gh api -X PATCH "repos/$REPO/issues/comments/$id" -F body=@comment.md > /dev/null
+          else
+            gh pr comment "$PR" --repo "$REPO" --body-file comment.md
+          fi
+
+      - name: Fail if plan failed
+        if: steps.plan.outcome == 'failure'
+        run: exit 1

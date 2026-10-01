@@ -1,102 +1,139 @@
 # Tags:
 # init -- for initial install and starting service
 # compose-up -- for starting service
-# compose-down -- for stopping service
+# compose-down -- for stopping service (only runs when asked for with --tags)
+# proxy -- for updating the Caddyfile (Caddy runs in the compose stack)
 
-- name: install dependencies
+- name: Check required variables
+  tags:
+    - always
+  ansible.builtin.assert:
+    that:
+      - db_password is defined
+      - db_password is match('^[A-Za-z0-9]{16,}$')
+    # Letters and digits only: the API builds a key=value connection string,
+    # and .env parsing breaks on quotes. Generate one with: openssl rand -hex 24
+    fail_msg: "Pass db_password (16+ letters/digits) with -e or an untracked vars file"
+    quiet: true
+
+- name: Install dependencies
   tags:
     - init
     - install
-  apt:
+  ansible.builtin.apt:
     name:
-      - apt-transport-https
       - ca-certificates
-      - curl
-      - gnupg-agent
-      - software-properties-common
-    state: latest
+      - python3-debian
+    state: present
     update_cache: true
+    cache_valid_time: 3600
 
-- name: GPG key
+- name: Docker repository
   tags:
     - init
     - install
-  apt_key:
-    url: https://download.docker.com/linux/debian/gpg
-    state: present
+  ansible.builtin.deb822_repository:
+    name: docker
+    types: deb
+    uris: https://download.docker.com/linux/debian
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: stable
+    signed_by: https://download.docker.com/linux/debian/gpg
 
-- name: repository docker
+- name: Install Docker and the compose plugin
   tags:
     - init
     - install
-  apt_repository:
-    repo: deb https://download.docker.com/linux/debian {{ ansible_distribution_release }} stable
-    state: present
-
-- name: install docker
-  tags:
-    - init
-    - install
-  apt:
+  ansible.builtin.apt:
     name:
       - docker-ce
       - docker-ce-cli
       - containerd.io
-    state: latest
-    update_cache: yes
+      - docker-compose-plugin
+    state: present
+    update_cache: true
 
-- name: adding admin docker group
+- name: Add admin user to the docker group
   tags:
     - init
     - install
-  user:
+  ansible.builtin.user:
     name: "{{ admin_user }}"
     groups: ["docker"]
-    append: yes
+    append: true
 
-- name: Install docker-compose
+- name: App directories
   tags:
     - init
-    - install
-    - install--docker-compose
-  get_url:
-    url: "{{ docker_compose_url }}"
-    dest: /usr/local/bin/docker-compose
-    mode: 'a+x'
+    - deploy
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - "{{ app_dir }}"
+    - "{{ app_dir }}/db"
+    - "{{ app_dir }}/caddy"
 
-- name: Clone repo
+# Postgres runs these once, when its data volume is empty
+- name: Database init scripts
   tags:
     - init
-    - clone
-  ansible.builtin.git:
-    repo: "{{ api_repo }}"
-    dest: /opt/api
-    single_branch: true
-    version: main
+    - deploy
+  ansible.builtin.copy:
+    src: "db/{{ item }}"
+    dest: "{{ app_dir }}/db/{{ item }}"
+    mode: '0755'
+  loop:
+    - init.sh
+    - seed.sh
 
-- name: Build local image
+- name: Compose file
   tags:
     - init
-    - build-image
-  community.docker.docker_image:
-    name: auto-api
-    build:
-      path: /opt/api/
-      args:
-        listen_port: 8080
-    source: build
+    - deploy
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ app_dir }}/compose.yml"
+    mode: '0644'
+
+# Compose reads .env from the project directory; readable by root only
+- name: Compose environment with the database password
+  tags:
+    - init
+    - deploy
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ app_dir }}/.env"
+    mode: '0600'
+  no_log: true
+
+# Mounted into the Caddy container as a directory (see compose.yml.j2)
+- name: Caddyfile
+  tags:
+    - init
+    - deploy
+    - proxy
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: "{{ app_dir }}/caddy/Caddyfile"
+    mode: '0644'
+  notify: reload caddy
 
 - name: Run Docker compose up
   tags:
     - init
+    - deploy
     - compose-up
-  ansible.builtin.shell: docker-compose up -d
-  args:
-    chdir: /opt/api
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: present
+    pull: missing
 
 - name: Run Docker compose down
   tags:
+    - never
     - compose-down
-  ansible.builtin.shell: docker-compose down
-  args:
-    chdir: /opt/api
+  community.docker.docker_compose_v2:
+    project_src: "{{ app_dir }}"
+    state: absent

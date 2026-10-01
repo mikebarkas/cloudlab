@@ -32,3 +32,10 @@ override.tf.json
 .terraformrc
 terraform.rc
 
+# Keys and certs
+*.key
+*.crt
+*.pem
+
+# Ansible vars files with secrets (e.g. db_password)
+secrets.yml

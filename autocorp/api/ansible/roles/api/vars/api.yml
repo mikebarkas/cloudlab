@@ -1,5 +1,24 @@
 ---
 
-admin_user: ""
-docker_compose_url: ""
-api_repo: ""
+# Default user on the Debian AMI
+admin_user: admin
+# DNS records from the Cloudflare stack
+api_domain: api.mikebarkas.com
+web_domain: autocorp.mikebarkas.com
+
+app_dir: /opt/auto-corp
+
+# Multi-arch (amd64 + arm64) image on Docker Hub
+api_image: mikebarkas/auto-corp-api
+api_image_tag: "0.4"
+web_image: mikebarkas/auto-corp-web
+web_image_tag: "1.3"
+
+# Official image; major version pinned
+caddy_image_tag: "2"
+
+# Pinned major version: Postgres 18 changes the data directory layout
+postgres_image_tag: "17"
+
+# db_password is required and not committed:
+# ansible-playbook api.yml -e @secrets.yml   (or -e db_password=...)

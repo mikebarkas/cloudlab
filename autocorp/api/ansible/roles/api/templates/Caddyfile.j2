@@ -1,0 +1,17 @@
+# Managed by Ansible
+# Caddy gets and renews a Let's Encrypt certificate for each domain,
+# redirects HTTP to HTTPS, and routes by hostname to containers by service name
+{
+	servers {
+		# No HTTP/3: the security group only allows TCP 443
+		protocols h1 h2
+	}
+}
+
+{{ api_domain }} {
+	reverse_proxy auto-api:8080
+}
+
+{{ web_domain }} {
+	reverse_proxy auto-web:8081
+}

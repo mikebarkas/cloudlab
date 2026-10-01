@@ -1,0 +1,5 @@
+- name: reload caddy
+  community.docker.docker_compose_v2_exec:
+    project_src: "{{ app_dir }}"
+    service: caddy
+    command: caddy reload --config /etc/caddy/Caddyfile

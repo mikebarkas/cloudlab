@@ -1,0 +1,86 @@
+# Managed by Ansible
+# DB_PASSWORD comes from .env in this directory
+
+services:
+  # The only service with published ports. Gets and renews Let's Encrypt
+  # certificates and proxies to the other containers by service name.
+  caddy:
+    image: caddy:{{ caddy_image_tag }}
+    container_name: caddy
+    restart: unless-stopped
+    depends_on:
+      - auto-api
+      - auto-web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      # A directory, not the single file: Ansible replaces the Caddyfile with a new
+      # file, and a single-file bind mount would keep showing the old one
+      - ./caddy:/etc/caddy:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    networks:
+      - auto-net
+
+  auto-api:
+    image: {{ api_image }}:{{ api_image_tag }}
+    container_name: auto-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGUSER: db_admin
+      PGPASSWORD: ${DB_PASSWORD}
+      PGHOST: db
+      PGPORT: "5432"
+      PGDATABASE: auto_db
+    # No published ports: Caddy reaches it over the compose network
+    networks:
+      - auto-net
+
+  auto-web:
+    image: {{ web_image }}:{{ web_image_tag }}
+    container_name: auto-web
+    restart: unless-stopped
+    depends_on:
+      - auto-api
+    environment:
+      # Server-side calls over the compose network; the browser never uses this URL
+      API_URL: http://auto-api:8080/search
+    # No published ports: Caddy reaches it over the compose network
+    networks:
+      - auto-net
+
+  # No published ports: only the API reaches Postgres, over the compose network
+  db:
+    image: postgres:{{ postgres_image_tag }}
+    container_name: auto-db
+    hostname: db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: db_admin
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres
+    volumes:
+      - auto-vol:/var/lib/postgresql/data
+      - ./db/init.sh:/docker-entrypoint-initdb.d/init.sh:ro
+      - ./db/seed.sh:/docker-entrypoint-initdb.d/seed.sh:ro
+    # Over TCP: the temporary server Postgres runs during first-start init is socket-only
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "127.0.0.1", "-U", "db_admin", "-d", "postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - auto-net
+
+volumes:
+  auto-vol:
+  # Certificates and ACME account; kept across restarts to avoid re-issuing
+  caddy-data:
+  caddy-config:
+
+networks:
+  auto-net:
